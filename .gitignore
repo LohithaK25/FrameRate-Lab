@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+results/raw/*.json
+results/raw/*.csv
+results/traces/*.json
+!results/raw/.gitkeep
+!results/traces/.gitkeep
+.DS_Store
+Thumbs.db

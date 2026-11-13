@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "framerate-lab"
+version = "0.1.0"
+description = "A reproducible real-time computer-vision inference benchmarking and profiling lab."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.2",
+  "torchvision>=0.17",
+  "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.8"]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+framerate-lab = "framerate_lab.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
