@@ -126,10 +126,15 @@ framerate-lab stream \
   --target-fps 30 \
   --duration 10 \
   --queue-size 4 \
-  --precision fp32
+  --precision fp32 \
+  --warmup 10
 ```
 
 The producer simulates a frame source. The bounded queue drops the oldest queued frame when full, favoring fresh frames over stale work. The consumer runs inference and records frame age, deadline misses, processed FPS, and drop rate.
+
+The configured duration starts after warm-up. Warm-up runs the model on a representative synthetic frame before the producer and measured consumer start; warm-up frames do not enter the queue or measured counters. `first_inference_ms` reports the first warm-up inference, including host-to-device transfer and device synchronization, while `warmup_duration_ms` reports the whole warm-up phase. Set `--warmup 0` to disable warm-up; in that case `first_inference_ms` is `null`.
+
+`frame_age` measures synthetic frame creation to inference completion only during the measured queue simulation; it is not the startup inference time. `elapsed_seconds` covers the measured simulation plus any queue drain after the producer stops, and excludes warm-up. Keep startup measurements visible when investigating latency outliers: warm-up is intended to separate initialization from steady-state measurements, but repeated experiments are needed to determine whether it explains any particular frame-age outlier.
 
 This is a controlled queue/scheduling simulation, not a measurement of an actual game or camera pipeline.
 
@@ -164,6 +169,7 @@ python scripts/plot_results.py --input results/raw/benchmark.csv
 - **Peak allocated memory:** peak tensor memory allocated by PyTorch during the measured run; it is not total device memory use.
 - **Peak reserved memory:** peak memory reserved by PyTorch's caching allocator; it is not equivalent to allocated memory.
 - **Frame age:** elapsed time from synthetic frame creation to inference completion in the queue simulation.
+- **Startup inference:** `first_inference_ms` is the first warm-up inference including transfer and synchronization; it is reported separately from steady-state frame age. `warmup_duration_ms` is the total warm-up phase duration.
 - **Deadline miss:** a processed frame whose age exceeds one target frame interval.
 
 A higher FPS number alone does not prove a better real-time experience. Compare throughput together with P95/P99 latency, memory, dropped frames, and deadline misses.

@@ -20,14 +20,19 @@ def run_stream_simulation(
     precision: str = "fp32",
     image_size: int = 224,
     seed: int = 11,
+    warmup_iterations: int = 10,
 ) -> dict[str, Any]:
     """Simulate a real-time frame source with a bounded latest-frame queue.
 
     Frames are synthetic tensors. This is a scheduler/queue experiment, not a
     measurement of a physical camera, game engine, or live graphics workload.
+    ``elapsed_seconds`` covers the measured simulation and queue drain, but not
+    the warm-up phase.
     """
     if target_fps <= 0 or duration_seconds <= 0 or queue_size < 1:
         raise ValueError("target_fps/duration_seconds must be > 0 and queue_size >= 1")
+    if warmup_iterations < 0:
+        raise ValueError("warmup_iterations must be >= 0")
     autocast_context(device, precision)  # validate config up front
 
     model = model.to(device).eval()
@@ -37,12 +42,26 @@ def run_stream_simulation(
         for _ in range(max(4, queue_size + 2))
     ]
 
+    warmup_start = time.perf_counter()
+    first_inference_ms: float | None = None
+    with torch.inference_mode():
+        for iteration in range(warmup_iterations):
+            inference_start = time.perf_counter()
+            device_frame = frame_pool[0].unsqueeze(0).to(
+                device, non_blocking=(device.type == "cuda")
+            )
+            with autocast_context(device, precision):
+                _ = model(device_frame)
+            synchronize(device)
+            if iteration == 0:
+                first_inference_ms = (time.perf_counter() - inference_start) * 1000.0
+    warmup_duration_ms = (time.perf_counter() - warmup_start) * 1000.0
+
     frames: queue.Queue[tuple[int, int, torch.Tensor]] = queue.Queue(maxsize=queue_size)
     producer_done = threading.Event()
     counters = {"produced": 0, "dropped": 0, "processed": 0, "deadline_misses": 0}
     counter_lock = threading.Lock()
     age_samples_ms: list[float] = []
-    stop_at = time.perf_counter() + duration_seconds
     frame_interval = 1.0 / target_fps
 
     def produce() -> None:
@@ -104,6 +123,7 @@ def run_stream_simulation(
                     frames.task_done()
 
     start = time.perf_counter()
+    stop_at = start + duration_seconds
     producer = threading.Thread(target=produce, name="frame-producer", daemon=True)
     consumer = threading.Thread(target=consume, name="inference-consumer", daemon=True)
     consumer.start()
@@ -118,6 +138,9 @@ def run_stream_simulation(
             "target_fps": target_fps,
             "duration_seconds": duration_seconds,
             "elapsed_seconds": elapsed,
+            "warmup_iterations": warmup_iterations,
+            "first_inference_ms": first_inference_ms,
+            "warmup_duration_ms": warmup_duration_ms,
             "queue_size": queue_size,
             "precision": precision,
             "device": str(device),

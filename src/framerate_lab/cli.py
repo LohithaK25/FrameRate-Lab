@@ -62,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     stream.add_argument("--duration", type=float, default=10.0)
     stream.add_argument("--queue-size", type=int, default=4)
     stream.add_argument("--precision", choices=["fp32", "fp16", "bf16"], default="fp32")
+    stream.add_argument("--warmup", type=int, default=10)
     stream.add_argument("--image-size", type=int, default=224)
     stream.add_argument("--seed", type=int, default=11)
     stream.add_argument("--output", type=Path, default=Path("results/raw/stream.json"))
@@ -126,6 +127,7 @@ def main() -> None:
             precision=args.precision,
             image_size=args.image_size,
             seed=args.seed,
+            warmup_iterations=args.warmup,
         )
         payload = {
             "project": "FrameRate Lab",
